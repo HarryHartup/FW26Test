@@ -265,6 +265,21 @@
   .station-next-teams { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:600; color:var(--text); flex:1; }
   .station-next-time { font-family:'Barlow Condensed',sans-serif; font-size:12px; color:var(--muted); white-space:nowrap; }
 
+/* 30-MIN WARNING PULSE */
+  @keyframes warningPulse {
+    0% { box-shadow: 0 0 0 0 rgba(229, 0, 17, 0.4); border-color: #FF6B6B; }
+    70% { box-shadow: 0 0 0 12px rgba(229, 0, 17, 0); border-color: var(--border); }
+    100% { box-shadow: 0 0 0 0 rgba(229, 0, 17, 0); border-color: #FF6B6B; }
+  }
+  .card-warning {
+    animation: warningPulse 2s infinite;
+  }
+  .status-warning { 
+    background: rgba(229,0,17,0.1); 
+    color: #FF6B6B; 
+    border: 1px solid rgba(229,0,17,0.3); 
+  }
+  
   /* KIT PANEL */
   .kit-panel {
     background: var(--dark2); border: 1px solid var(--border); border-radius: 8px;
@@ -1287,12 +1302,16 @@ function parseIBCDate(ddmmyyyy, hhmm){
 function getActiveMatch(stn, nowMs){
   const stMatches = matchData.filter(m => String(m[10]) === String(stn));
   const preMatchMs = 15 * 60 * 1000;
+  const warningMs = 30 * 60 * 1000;
+  
   for(const m of stMatches){
     if(!m[1]||!m[4]) continue;
     const koMs = parseIBCDate(m[1], m[4]);
     const endMs = koMs + 2*60*60*1000;
+    
     if(nowMs >= (koMs - preMatchMs) && nowMs < endMs) return {m, state:'live', koMs};
-    if(nowMs < (koMs - preMatchMs)) return {m, state:'upcoming', koMs};
+    if(nowMs >= (koMs - warningMs) && nowMs < (koMs - preMatchMs)) return {m, state:'warning', koMs};
+    if(nowMs < (koMs - warningMs)) return {m, state:'upcoming', koMs};
   }
   return null;
 }
@@ -1335,20 +1354,23 @@ function renderCountdown(koMs, nowMs, state){
   </div>`;
 }
 
-function renderStationCard(stn, cardEl){
-  const nowMs = Date.now();
-  const active = getActiveMatch(stn, nowMs);
-
-  if(!active){
-    cardEl.innerHTML = `
-      <div class="station-card-header">
-        <span class="station-label">Station ${stn}</span>
-        <span class="station-status status-idle">Idle</span>
-      </div>
-      <div class="station-idle-msg">No upcoming matches assigned</div>`;
-    return;
+const {m, state, koMs} = active;
+  const [num,date,venue,tgm,koIBC,round,teamA,teamB,kit,gfx,station,operator] = m;
+  const localTime = localKOFromIBC(venue, koIBC);
+  
+  // Apply visual states based on time
+  let statusCls = 'status-upcoming';
+  let statusLbl = 'Up Next';
+  cardEl.className = `station-card stn-${stn}`; // Reset base classes
+  
+  if (state === 'live') {
+    statusCls = 'status-live';
+    statusLbl = '● Live';
+  } else if (state === 'warning') {
+    statusCls = 'status-warning';
+    statusLbl = '30m Warning';
+    cardEl.classList.add('card-warning'); // Adds the red pulse to the card border
   }
-
   const {m, state, koMs} = active;
   const [num,date,venue,tgm,koIBC,round,teamA,teamB,kit,gfx,station,operator] = m;
   const localTime = localKOFromIBC(venue, koIBC);
